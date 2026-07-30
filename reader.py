@@ -54,16 +54,3 @@ class DataSUSReader:
 
     def _read_parquet(self, path: Path, **kwargs) -> pd.DataFrame:
         return pd.read_parquet(path, **kwargs)
-
-
-if __name__ == "__main__":
-    from src.download import DataSUSDownloader
-
-    downloader = DataSUSDownloader()
-    arquivo = downloader.download(uf="SP", year=2024, month=1)
-
-    reader = DataSUSReader()
-    df = reader.read(arquivo)
-
-    print(f"Registros: {len(df)} | Colunas: {list(df.columns)}")
-    print(df.head())
