@@ -20,7 +20,9 @@ class DataSUSReader:
         ".parquet": "_read_parquet",
     }
 
-    def read(self, filepath: str | Path, **kwargs) -> pd.DataFrame:
+    _IDADE_FATOR = {1: 1 / 24 / 365, 2: 1 / 365, 3: 1 / 12, 4: 1, 5: 100}
+
+    def read(self, filepath: str | Path, decode: bool = True, **kwargs) -> pd.DataFrame:
         path = Path(filepath)
         if not path.exists():
             raise FileNotFoundError(f"Arquivo nao encontrado: {path}")
@@ -30,7 +32,18 @@ class DataSUSReader:
         if handler_name is None:
             raise ValueError(f"Extensao nao suportada: {ext}")
 
-        return getattr(self, handler_name)(path, **kwargs)
+        df = getattr(self, handler_name)(path, **kwargs)
+        return self._decode_known_fields(df) if decode else df
+
+    def _decode_known_fields(self, df: pd.DataFrame) -> pd.DataFrame:
+        if "IDADE" in df.columns:
+            df["IDADE"] = pd.to_numeric(df["IDADE"], errors="coerce")
+            unidade = (df["IDADE"] // 100).astype("Int64")
+            valor = df["IDADE"] % 100
+            df["IDADE"] = valor * unidade.map(self._IDADE_FATOR)
+        if "SEXO" in df.columns:
+            df["SEXO"] = df["SEXO"].map({1: "Masculino", 3: "Feminino"}).fillna("Ignorado")
+        return df
 
     def _read_dbc(self, path: Path, encoding: str = "iso-8859-1") -> pd.DataFrame:
         if dbc2dbf is None:

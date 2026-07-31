@@ -1,16 +1,21 @@
 import streamlit as st
 from src.download import DataSUSDownloader
 from reader import *
+from src.download import SYSTEMS
 
-st.title("DataSUS Explorer")
+#python -m streamlit run app.py
+
+st.title("Busca de dados")
 
 col1, col2, col3 = st.columns(3)
 uf = col1.text_input("UF", value="RJ").upper()
 year = col2.number_input("Ano", value=2024, step=1)
 month = col3.number_input("Mês", value=1, min_value=1, max_value=12, step=1)
 
+tipo_dado = st.selectbox("Selecione o sistema", options=list(SYSTEMS.keys()))
+
 if st.button("Baixar e carregar"):
-    downloader = DataSUSDownloader()
+    downloader = DataSUSDownloader(system=tipo_dado)
     arquivo = downloader.download(uf=uf, year=year, month=month)
     st.session_state["df"] = DataSUSReader().read(arquivo)
     st.success(f"Arquivo salvo em: {arquivo}")
