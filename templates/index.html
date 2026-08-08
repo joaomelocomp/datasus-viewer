@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DataSUS · Busca de dados</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__mark">DS</div>
+    <div class="topbar__title">
+      <h1>Busca de dados</h1>
+      <span>DataSUS · extração e visualização</span>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- Query builder -->
+    <section class="card">
+      <h2 class="card__title">01 · Parâmetros</h2>
+      <div class="field-row">
+        <label class="field">
+          <span>UF</span>
+          <select id="uf">
+            {% for u in ufs %}
+            <option value="{{ u }}" {% if u == default_uf %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span>Ano</span>
+          <input id="year" type="number" value="2024" step="1">
+        </label>
+        <label class="field">
+          <span>Mês</span>
+          <input id="month" type="number" value="1" min="1" max="12" step="1">
+        </label>
+        <label class="field field--wide">
+          <span>Sistema</span>
+          <select id="system">
+            {% for s in systems %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button id="btn-download" class="btn btn--primary">Baixar e carregar</button>
+      </div>
+      <p id="download-status" class="status"></p>
+    </section>
+
+    <!-- Downloaded files -->
+    <section class="card">
+      <div class="card__header">
+        <h2 class="card__title">02 · Arquivos baixados</h2>
+        <button id="btn-refresh" class="btn btn--ghost">Atualizar</button>
+      </div>
+
+      <div id="files-empty" class="empty" {% if files %}hidden{% endif %}>
+        Nenhum arquivo baixado ainda.
+      </div>
+
+      <table id="files-table" class="table" {% if not files %}hidden{% endif %}>
+        <thead>
+          <tr>
+            <th class="col-check"></th>
+            <th>Arquivo</th>
+            <th class="col-num">Tamanho (MB)</th>
+            <th>Modificado</th>
+          </tr>
+        </thead>
+        <tbody id="files-tbody">
+          {% for f in files %}
+          <tr data-file="{{ f.name }}">
+            <td class="col-check"><input type="checkbox" class="file-check"></td>
+            <td class="mono">{{ f.name }}</td>
+            <td class="col-num mono">{{ "%.2f"|format(f.size_mb) }}</td>
+            <td class="mono">{{ f.modified }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="field-row field-row--actions">
+        <button id="btn-open" class="btn btn--secondary" disabled>Abrir selecionado</button>
+        <button id="btn-delete" class="btn btn--danger" disabled>Excluir selecionado(s)</button>
+      </div>
+      <p id="files-status" class="status"></p>
+    </section>
+
+    <!-- Confirm delete dialog -->
+    <div id="confirm-overlay" class="overlay" hidden>
+      <div class="confirm-box">
+        <p id="confirm-text"></p>
+        <div class="field-row">
+          <button id="confirm-yes" class="btn btn--danger">Sim, excluir</button>
+          <button id="confirm-no" class="btn btn--ghost">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data & chart -->
+    <section class="card" id="data-section" {% if not df_loaded %}hidden{% endif %}>
+      <h2 class="card__title">03 · Dados carregados</h2>
+      <p id="data-summary" class="summary mono">
+        {% if df_info %}Registros: {{ df_info.rows }} | Colunas: {{ df_info.cols }}{% endif %}
+      </p>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Tipo de gráfico</span>
+          <select id="chart-type">
+            <option>Barras</option>
+            <option>Pizza</option>
+            <option>Dispersão</option>
+            <option>Histograma</option>
+          </select>
+        </label>
+
+        <label class="field" id="field-column">
+          <span>Coluna</span>
+          <select id="chart-column"></select>
+        </label>
+
+        <label class="field" id="field-x" hidden>
+          <span>Eixo X</span>
+          <select id="chart-x"></select>
+        </label>
+        <label class="field" id="field-y" hidden>
+          <span>Eixo Y</span>
+          <select id="chart-y"></select>
+        </label>
+        <label class="field" id="field-color" hidden>
+          <span>Colorir por</span>
+          <select id="chart-color">
+            <option value="">(nenhum)</option>
+          </select>
+        </label>
+
+        <label class="field" id="field-topn">
+          <span>Top N (<span id="topn-value">15</span>)</span>
+          <input id="chart-topn" type="range" min="5" max="30" value="15">
+        </label>
+      </div>
+
+      <div id="chart-container"></div>
+      <p id="chart-status" class="status"></p>
+    </section>
+
+  </main>
+
+  <script>
+    window.__DATA_COLUMNS__ = {{ (df_info.columns if df_info else []) | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

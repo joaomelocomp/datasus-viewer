@@ -1,133 +1,161 @@
-import streamlit as st
-from src.download import DataSUSDownloader
-from reader import *
-from src.download import SYSTEMS
-import plotly.express as px
-from validators.uf import validar_uf
-from validators.year import validar_ano
+import json
+import uuid
+from datetime import datetime
 from pathlib import Path
 
+import plotly.express as px
+import plotly.utils
+from flask import Flask, jsonify, render_template, request, session
+
+from src.download import DataSUSDownloader, SYSTEMS
+from reader import DataSUSReader
+from validators.uf import validar_uf
+from validators.year import validar_ano
+
+app = Flask(__name__)
+app.secret_key = "change-me-in-production"  # required for session cookies
+
 PASTA = Path("downloads")
+PASTA.mkdir(exist_ok=True)
 
-arquivos = list(PASTA.glob("*.dbc"))
-
-#python -m streamlit run app.py
-
-st.title("Busca de dados")
-
-ufs = [
-    "AC","AL","AP","AM","BA","CE","DF","ES",
-    "GO","MA","MT","MS","MG","PA","PB","PR",
-    "PE","PI","RJ","RN","RS","RO","RR","SC",
-    "SP","SE","TO",
+UFS = [
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES",
+    "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR",
+    "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+    "SP", "SE", "TO",
 ]
 
-col1, col2, col3 = st.columns(3)
-uf = col1.selectbox("UF", options=ufs, index=ufs.index("RJ"))
-year = col2.number_input("Ano", value=2024, step=1)
-month = col3.number_input("Mês", value=1, min_value=1, max_value=12, step=1)
+# In-memory per-session dataframe store: {session_id: DataFrame}
+# NOTE: single-process only. For multi-worker/production deployments,
+# swap this for a shared cache (Redis, etc.) keyed the same way.
+DF_STORE: dict = {}
 
-tipo_dado = st.selectbox("Selecione o sistema", options=list(SYSTEMS.keys()))
 
-import pandas as pd
-from datetime import datetime
+def _sid() -> str:
+    if "sid" not in session:
+        session["sid"] = uuid.uuid4().hex
+    return session["sid"]
 
-st.subheader("Dados baixados")
 
-arquivos = sorted(PASTA.glob("*.dbc"), key=lambda p: p.stat().st_mtime, reverse=True)
+def _get_df():
+    return DF_STORE.get(_sid())
 
-if not arquivos:
-    st.info("Nenhum arquivo baixado ainda.")
-else:
-    registros = [
+
+def _set_df(df):
+    DF_STORE[_sid()] = df
+
+
+def _list_files():
+    arquivos = sorted(PASTA.glob("*.dbc"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [
         {
-            "Excluir": False,
-            "Arquivo": a.name,
-            "Tamanho (MB)": round(a.stat().st_size / 1_048_576, 2),
-            "Modificado": datetime.fromtimestamp(a.stat().st_mtime).strftime("%d/%m/%Y %H:%M"),
+            "name": a.name,
+            "size_mb": round(a.stat().st_size / 1_048_576, 2),
+            "modified": datetime.fromtimestamp(a.stat().st_mtime).strftime("%d/%m/%Y %H:%M"),
         }
         for a in arquivos
     ]
-    df_arquivos = pd.DataFrame(registros)
 
-    edited = st.data_editor(
-        df_arquivos,
-        column_config={
-            "Excluir": st.column_config.CheckboxColumn(required=True),
-            "Arquivo": st.column_config.TextColumn(disabled=True),
-            "Tamanho (MB)": st.column_config.NumberColumn(disabled=True),
-            "Modificado": st.column_config.TextColumn(disabled=True),
-        },
-        hide_index=True,
-        use_container_width=True,
-        key="editor_arquivos",
+
+def _df_payload(df):
+    return {
+        "rows": len(df),
+        "cols": len(df.columns),
+        "columns": list(df.columns),
+    }
+
+
+@app.route("/")
+def index():
+    df = _get_df()
+    return render_template(
+        "index.html",
+        ufs=UFS,
+        default_uf="RJ",
+        systems=list(SYSTEMS.keys()),
+        files=_list_files(),
+        df_loaded=df is not None,
+        df_info=_df_payload(df) if df is not None else None,
     )
 
-    selecionados = edited[edited["Excluir"]]["Arquivo"].tolist()
 
-    col_a, col_b = st.columns([1, 3])
+@app.get("/api/files")
+def api_files():
+    return jsonify(files=_list_files())
 
-    with col_a:
-        if st.button("Abrir selecionado", disabled=len(selecionados) != 1):
-            st.session_state["df"] = DataSUSReader().read(PASTA / selecionados[0])
-            st.success(f"{selecionados[0]} carregado.")
 
-    with col_b:
-        if selecionados:
-            if st.session_state.get("confirmar_exclusao") != tuple(selecionados):
-                if st.button(f"Excluir {len(selecionados)} arquivo(s)", type="primary"):
-                    st.session_state["confirmar_exclusao"] = tuple(selecionados)
-                    st.rerun()
-            else:
-                st.warning(f"Confirma exclusão de: {', '.join(selecionados)}?")
-                c1, c2 = st.columns(2)
-                if c1.button("Sim, excluir", type="primary"):
-                    for nome in selecionados:
-                        (PASTA / nome).unlink(missing_ok=True)
-                    del st.session_state["confirmar_exclusao"]
-                    st.success("Arquivo(s) excluído(s).")
-                    st.rerun()
-                if c2.button("Cancelar"):
-                    del st.session_state["confirmar_exclusao"]
-                    st.rerun()
+@app.post("/api/files/delete")
+def api_files_delete():
+    nomes = request.json.get("files", [])
+    for nome in nomes:
+        (PASTA / nome).unlink(missing_ok=True)
+    return jsonify(files=_list_files())
 
-if st.button("Baixar e carregar"):
+
+@app.post("/api/files/open")
+def api_files_open():
+    nome = request.json.get("file")
+    caminho = PASTA / nome
+    if not caminho.exists():
+        return jsonify(error=f"Arquivo não encontrado: {nome}"), 404
+    df = DataSUSReader().read(caminho)
+    _set_df(df)
+    return jsonify(**_df_payload(df))
+
+
+@app.post("/api/download")
+def api_download():
+    body = request.json
     try:
-        uf = validar_uf(uf)
-        year = validar_ano(year)
-        downloader = DataSUSDownloader(system=tipo_dado)
+        uf = validar_uf(body.get("uf"))
+        year = validar_ano(int(body.get("year")))
+        month = int(body.get("month"))
+        system = body.get("system")
+
+        downloader = DataSUSDownloader(system=system)
         arquivo = downloader.download(uf=uf, year=year, month=month)
-        st.session_state["df"] = DataSUSReader().read(arquivo)
-        st.success(f"Arquivo salvo em: {arquivo}")
-        st.rerun()
-
+        df = DataSUSReader().read(arquivo)
+        _set_df(df)
+        return jsonify(path=str(arquivo), files=_list_files(), **_df_payload(df))
     except ValueError as e:
-        st.error(e)
+        return jsonify(error=str(e)), 400
 
-if "df" in st.session_state:
-    df = st.session_state["df"]
-    st.write(f"Registros: {len(df)} | Colunas: {len(df.columns)}")
 
-    tipo_grafico = st.selectbox("Tipo de gráfico", ["Barras", "Pizza", "Dispersão", "Histograma"])
-    coluna_alvo = st.selectbox("Escolha a coluna para plotar", df.columns)
-    top_n = st.slider("Quantidade de categorias exibidas", 5, 30, 15)
+@app.post("/api/chart")
+def api_chart():
+    df = _get_df()
+    if df is None:
+        return jsonify(error="Nenhum dado carregado."), 400
 
-    if tipo_grafico in ("Barras", "Pizza"):
-        counts = df[coluna_alvo].value_counts(dropna=True).head(top_n).reset_index()
-        counts.columns = [coluna_alvo, "count"]
+    body = request.json
+    chart_type = body.get("chart_type")
+    column = body.get("column")
+    top_n = int(body.get("top_n", 15))
 
-        if tipo_grafico == "Barras":
-            fig = px.bar(counts, x=coluna_alvo, y="count")
+    try:
+        if chart_type in ("Barras", "Pizza"):
+            counts = df[column].value_counts(dropna=True).head(top_n).reset_index()
+            counts.columns = [column, "count"]
+            fig = (
+                px.bar(counts, x=column, y="count")
+                if chart_type == "Barras"
+                else px.pie(counts, names=column, values="count")
+            )
+        elif chart_type == "Dispersão":
+            col_x = body.get("x")
+            col_y = body.get("y")
+            cor = body.get("color") or None
+            fig = px.scatter(df, x=col_x, y=col_y, color=cor)
+        elif chart_type == "Histograma":
+            fig = px.histogram(df, x=column, nbins=30)
         else:
-            fig = px.pie(counts, names=coluna_alvo, values="count")
+            return jsonify(error=f"Tipo de gráfico inválido: {chart_type}"), 400
+    except Exception as e:
+        return jsonify(error=str(e)), 400
 
-    elif tipo_grafico == "Dispersão":
-        col_x = st.selectbox("Eixo X", df.columns, key="x")
-        col_y = st.selectbox("Eixo Y", df.columns, key="y")
-        cor = st.selectbox("Colorir por (opcional)", [None] + list(df.columns), key="cor")
-        fig = px.scatter(df, x=col_x, y=col_y, color=cor)
+    fig_json = json.loads(json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder))
+    return jsonify(figure=fig_json)
 
-    elif tipo_grafico == "Histograma":
-        fig = px.histogram(df, x=coluna_alvo, nbins=30)
 
-    st.plotly_chart(fig, use_container_width=True)
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
