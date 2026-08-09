@@ -237,9 +237,18 @@
     }
   }
 
+  function updateQuickStats(stats) {
+    if (!stats) return;
+    $("stat-registros").textContent = stats.registros.display;
+    $("stat-municipios").textContent = stats.municipios.display;
+    $("stat-internacoes").textContent = stats.internacoes.display;
+    $("stat-idade").textContent = stats.media_idade.display;
+  }
+
   function onDataLoaded(data) {
     dataColumns = data.columns;
     dataSummary.textContent = `Registros: ${data.rows} | Colunas: ${data.cols}`;
+    updateQuickStats(data.stats);
     dataSection.hidden = false;
     populateColumnSelects();
     syncFieldsForChartType();

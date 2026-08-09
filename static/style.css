@@ -214,6 +214,43 @@ input[type="range"] { accent-color: var(--accent); width: 130px; }
 
 .summary { color: var(--text-muted); margin: 0 0 16px; }
 
+/* Quick stats */
+.quick-stats { margin: 0 0 20px; }
+.quick-stats__title {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent-hover);
+}
+
 #chart-container { margin-top: 18px; min-height: 400px; }
 
 /* Confirm dialog */

@@ -108,6 +108,28 @@
         {% if df_info %}Registros: {{ df_info.rows }} | Colunas: {{ df_info.cols }}{% endif %}
       </p>
 
+      <section class="quick-stats" id="quick-stats">
+        <h3 class="quick-stats__title">Estatísticas rápidas</h3>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="stat-label">Registros</span>
+            <strong class="stat-value mono" id="stat-registros">{{ df_info.stats.registros.display if df_info else '—' }}</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Municípios</span>
+            <strong class="stat-value mono" id="stat-municipios">{{ df_info.stats.municipios.display if df_info else '—' }}</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Internações</span>
+            <strong class="stat-value mono" id="stat-internacoes">{{ df_info.stats.internacoes.display if df_info else '—' }}</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Média de idade</span>
+            <strong class="stat-value mono" id="stat-idade">{{ df_info.stats.media_idade.display if df_info else '—' }}</strong>
+          </div>
+        </div>
+      </section>
+
       <div class="field-row">
         <label class="field">
           <span>Tipo de gráfico</span>

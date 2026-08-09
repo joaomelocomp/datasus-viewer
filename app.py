@@ -9,6 +9,7 @@ from flask import Flask, jsonify, render_template, request, session
 
 from src.download import DataSUSDownloader, SYSTEMS
 from reader import DataSUSReader
+from stats import calcular_estatisticas
 from validators.uf import validar_uf
 from validators.year import validar_ano
 
@@ -78,6 +79,7 @@ def _df_payload(df):
         "rows": len(df),
         "cols": len(df.columns),
         "columns": list(df.columns),
+        "stats": calcular_estatisticas(df),
     }
 
 
