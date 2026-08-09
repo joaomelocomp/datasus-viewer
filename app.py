@@ -15,7 +15,7 @@ from validators.year import validar_ano
 app = Flask(__name__)
 app.secret_key = "change-me-in-production"  # required for session cookies
 
-PASTA = Path("downloads")
+PASTA = Path(__file__).resolve().parent / "data" / "raw"
 PASTA.mkdir(exist_ok=True)
 
 UFS = [
@@ -24,6 +24,15 @@ UFS = [
     "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
     "SP", "SE", "TO",
 ]
+
+SYSTEM_DESCRIPTIONS = {
+    "SIH": "Internações Hospitalares",
+    "SIA": "Atendimentos Ambulatoriais",
+    "SIM": "Óbitos",
+    "SINASC": "Nascimentos",
+    "CNES-ST": "Estabelecimentos de Saúde",
+    "CNES-LT": "Leitos Hospitalares",
+}
 
 # In-memory per-session dataframe store: {session_id: DataFrame}
 # NOTE: single-process only. For multi-worker/production deployments,
@@ -46,12 +55,19 @@ def _set_df(df):
 
 
 def _list_files():
-    arquivos = sorted(PASTA.glob("*.dbc"), key=lambda p: p.stat().st_mtime, reverse=True)
+    arquivos = sorted(
+        PASTA.rglob("*.dbc"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True
+    )
+
     return [
         {
             "name": a.name,
             "size_mb": round(a.stat().st_size / 1_048_576, 2),
-            "modified": datetime.fromtimestamp(a.stat().st_mtime).strftime("%d/%m/%Y %H:%M"),
+            "modified": datetime.fromtimestamp(
+                a.stat().st_mtime
+            ).strftime("%d/%m/%Y %H:%M"),
         }
         for a in arquivos
     ]
@@ -72,7 +88,7 @@ def index():
         "index.html",
         ufs=UFS,
         default_uf="RJ",
-        systems=list(SYSTEMS.keys()),
+        systems=SYSTEM_DESCRIPTIONS,
         files=_list_files(),
         df_loaded=df is not None,
         df_info=_df_payload(df) if df is not None else None,

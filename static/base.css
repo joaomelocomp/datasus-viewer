@@ -1,8 +1,0 @@
-.form-row {
-    display: flex;
-    gap: 20px;
-}
-
-.form-row > div {
-    flex: 1;
-}

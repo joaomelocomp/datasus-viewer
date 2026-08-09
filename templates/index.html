@@ -12,7 +12,7 @@
     <div class="topbar__mark">DS</div>
     <div class="topbar__title">
       <h1>Busca de dados</h1>
-      <span>DataSUS · extração e visualização</span>
+      <span>Desenvolvido por AFIRMASUS - UERJ</span>
     </div>
   </header>
 
@@ -32,17 +32,17 @@
         </label>
         <label class="field">
           <span>Ano</span>
-          <input id="year" type="number" value="2024" step="1">
+          <input id="year" type="number" value="2024" step="1" autocomplete="off">
         </label>
         <label class="field">
           <span>Mês</span>
-          <input id="month" type="number" value="1" min="1" max="12" step="1">
+          <input id="month" type="number" value="1" min="1" max="12" step="1" autocomplete="off">
         </label>
         <label class="field field--wide">
           <span>Sistema</span>
           <select id="system">
-            {% for s in systems %}
-            <option value="{{ s }}">{{ s }}</option>
+            {% for s, description in systems.items() %}
+            <option value="{{ s }}">{{ s }} — {{ description }}</option>
             {% endfor %}
           </select>
         </label>
@@ -140,7 +140,7 @@
         </label>
 
         <label class="field" id="field-topn">
-          <span>Top N (<span id="topn-value">15</span>)</span>
+          <span>Quantidade de categorias exibidas (<span id="topn-value">15</span>)</span>
           <input id="chart-topn" type="range" min="5" max="30" value="15">
         </label>
       </div>
