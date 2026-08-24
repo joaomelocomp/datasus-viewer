@@ -1,6 +1,5 @@
 venv/
 prototipo1
-requirements.txt
 src\__pycache__
 rs.py
 files.zip
