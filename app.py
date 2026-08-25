@@ -1,5 +1,7 @@
 import json
+import os
 import uuid
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 
@@ -35,10 +37,13 @@ SYSTEM_DESCRIPTIONS = {
     "CNES-LT": "Leitos Hospitalares",
 }
 
-# In-memory per-session dataframe store: {session_id: DataFrame}
-# NOTE: single-process only. For multi-worker/production deployments,
-# swap this for a shared cache (Redis, etc.) keyed the same way.
-DF_STORE: dict = {}
+# Store LRU limitado: evita manter DataFrames de sessoes antigas vivos
+# indefinidamente. Com 512MB de RAM, isso e essencial -- o dict antigo
+# (sem limite) acumulava um DataFrame completo por sessao para sempre.
+# MAX_SESSIONS=1 assume uso predominantemente single-user; aumente se
+# precisar de multiplos usuarios simultaneos ativos.
+MAX_SESSIONS = int(os.environ.get("MAX_DF_SESSIONS", 1))
+DF_STORE: "OrderedDict" = OrderedDict()
 
 
 def _sid() -> str:
@@ -48,11 +53,24 @@ def _sid() -> str:
 
 
 def _get_df():
-    return DF_STORE.get(_sid())
+    sid = _sid()
+    if sid in DF_STORE:
+        DF_STORE.move_to_end(sid)
+        return DF_STORE[sid]
+    return None
 
 
 def _set_df(df):
-    DF_STORE[_sid()] = df
+    import gc
+
+    sid = _sid()
+    DF_STORE[sid] = df
+    DF_STORE.move_to_end(sid)
+
+    while len(DF_STORE) > MAX_SESSIONS:
+        _, old_df = DF_STORE.popitem(last=False)
+        del old_df
+    gc.collect()
 
 
 def _list_files():
@@ -173,6 +191,7 @@ def api_download():
 
         return jsonify(error=str(e)), 500
 
+
 @app.post("/api/chart")
 def api_chart():
     df = _get_df()
@@ -193,6 +212,7 @@ def api_chart():
                 if chart_type == "Barras"
                 else px.pie(counts, names=column, values="count")
             )
+            del counts
         elif chart_type == "Dispersão":
             col_x = body.get("x")
             col_y = body.get("y")
@@ -208,8 +228,6 @@ def api_chart():
     fig_json = json.loads(json.dumps(fig, cls=plotly.utils.PlotlyJSONEncoder))
     return jsonify(figure=fig_json)
 
-
-import os
 
 if __name__ == "__main__":
     app.run(
