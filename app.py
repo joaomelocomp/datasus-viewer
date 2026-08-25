@@ -124,20 +124,54 @@ def api_files_open():
 @app.post("/api/download")
 def api_download():
     body = request.json
+
     try:
+        print("1. Recebendo requisição:", body, flush=True)
+
         uf = validar_uf(body.get("uf"))
         year = validar_ano(int(body.get("year")))
         month = int(body.get("month"))
         system = body.get("system")
 
+        print(f"2. Parâmetros: {uf=} {year=} {month=} {system=}", flush=True)
+
         downloader = DataSUSDownloader(system=system)
-        arquivo = downloader.download(uf=uf, year=year, month=month)
+
+        print("3. Iniciando download...", flush=True)
+
+        arquivo = downloader.download(
+            uf=uf,
+            year=year,
+            month=month
+        )
+
+        print(f"4. Download concluído: {arquivo}", flush=True)
+
         df = DataSUSReader().read(arquivo)
+
+        print(f"5. Arquivo lido: {df.shape}", flush=True)
+
         _set_df(df)
-        return jsonify(path=str(arquivo), files=_list_files(), **_df_payload(df))
+
+        print("6. Tudo pronto!", flush=True)
+
+        return jsonify(
+            path=str(arquivo),
+            files=_list_files(),
+            **_df_payload(df)
+        )
+
     except ValueError as e:
+        print("ERRO ValueError:", e, flush=True)
         return jsonify(error=str(e)), 400
 
+    except Exception as e:
+        import traceback
+
+        print("ERRO REAL:", flush=True)
+        traceback.print_exc()
+
+        return jsonify(error=str(e)), 500
 
 @app.post("/api/chart")
 def api_chart():
