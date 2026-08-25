@@ -147,13 +147,13 @@ def api_download():
 
         print(f"4. Download concluído: {arquivo}", flush=True)
 
+        print(f"5. Iniciando leitura do DBC...", flush=True)
+
         df = DataSUSReader().read(arquivo)
 
-        print(f"5. Arquivo lido: {df.shape}", flush=True)
+        print("6. Tudo pronto!", flush=True)
 
         _set_df(df)
-
-        print("6. Tudo pronto!", flush=True)
 
         return jsonify(
             path=str(arquivo),
